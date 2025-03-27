@@ -42,7 +42,6 @@ export const RacingScreen = () => {
           minDistance={30}
           maxDistance={200}
         />
-        <gridHelper args={[200, 200, '#666666', '#444444']} />
         <Environment preset="sunset" />
       </Canvas>
     </div>
