@@ -1,0 +1,312 @@
+.game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.game-container canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.mode-select-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+  z-index: 10;
+}
+
+.mode-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  margin-bottom: 2rem;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 2rem;
+}
+
+.mode-button {
+  padding: 1.5rem 3rem;
+  font-size: 1.5rem;
+  border: none;
+  border-radius: 1rem;
+  background: linear-gradient(45deg, #FF3B3B, #FF6D00);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.3);
+}
+
+.mode-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(255, 107, 0, 0.5);
+}
+
+.mode-button.boat {
+  background: linear-gradient(45deg, #007BFF, #00BFFF);
+  box-shadow: 0 0 20px rgba(0, 123, 255, 0.3);
+}
+
+.mode-button.boat:hover {
+  box-shadow: 0 0 30px rgba(0, 123, 255, 0.5);
+}
+
+/* 난이도 선택 스타일 */
+.difficulty-select-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+  z-index: 10;
+}
+
+.difficulty-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  margin-bottom: 2rem;
+}
+
+.difficulty-buttons {
+  display: flex;
+  gap: 2rem;
+}
+
+.difficulty-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 2rem;
+  font-size: 1.5rem;
+  border: none;
+  border-radius: 1rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.difficulty-button.easy {
+  background: linear-gradient(45deg, #00E676, #00B248);
+  box-shadow: 0 0 20px rgba(0, 230, 118, 0.3);
+}
+
+.difficulty-button.normal {
+  background: linear-gradient(45deg, #FF9100, #FF6D00);
+  box-shadow: 0 0 20px rgba(255, 145, 0, 0.3);
+}
+
+.difficulty-button.hard {
+  background: linear-gradient(45deg, #FF3B3B, #C30000);
+  box-shadow: 0 0 20px rgba(255, 59, 59, 0.3);
+}
+
+.difficulty-button:hover {
+  transform: scale(1.05);
+}
+
+.difficulty-button.easy:hover {
+  box-shadow: 0 0 30px rgba(0, 230, 118, 0.5);
+}
+
+.difficulty-button.normal:hover {
+  box-shadow: 0 0 30px rgba(255, 145, 0, 0.5);
+}
+
+.difficulty-button.hard:hover {
+  box-shadow: 0 0 30px rgba(255, 59, 59, 0.5);
+}
+
+.difficulty-button.back {
+  background: linear-gradient(45deg, #666666, #333333);
+  box-shadow: 0 0 20px rgba(102, 102, 102, 0.3);
+  margin-top: 1rem;
+}
+
+.difficulty-button.back:hover {
+  box-shadow: 0 0 30px rgba(102, 102, 102, 0.5);
+}
+
+.difficulty-desc {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+  .mode-title, .difficulty-title {
+    font-size: 2rem;
+  }
+
+  .mode-buttons, .difficulty-buttons {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .mode-button, .difficulty-button {
+    width: 100%;
+    padding: 1.2rem 2rem;
+    font-size: 1.2rem;
+  }
+
+  .difficulty-button {
+    min-width: 280px;
+  }
+
+  .difficulty-button.back {
+    margin-top: 0.5rem;
+  }
+}
+
+/* 뒤로가기 버튼 스타일 */
+.back-button {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.back-button:before {
+  content: '←';
+  font-size: 1.2rem;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(-5px);
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+  .back-button {
+    top: 1rem;
+    left: 1rem;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+}
+
+.betting-screen {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 2rem;
+  padding: 2rem;
+  height: 100vh;
+  color: white;
+  background: transparent;
+}
+
+/* 승식 선택 스타일 */
+.bet-type-select-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+  z-index: 10;
+}
+
+.bet-type-title {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  margin-bottom: 2rem;
+}
+
+.bet-type-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 300px;
+}
+
+.bet-type-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 2rem;
+  border: none;
+  border-radius: 1rem;
+  background: linear-gradient(45deg, #00a6ff, #00E676);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.bet-type-button:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 30px rgba(0, 230, 118, 0.3);
+}
+
+.bet-type-name {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.bet-type-desc {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.bet-type-button.back {
+  background: linear-gradient(45deg, #666666, #333333);
+  margin-top: 1rem;
+}
+
+.bet-type-button.back:hover {
+  box-shadow: 0 0 30px rgba(102, 102, 102, 0.3);
+}
+
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+  .bet-type-title {
+    font-size: 2rem;
+  }
+
+  .bet-type-buttons {
+    min-width: 280px;
+  }
+
+  .bet-type-button {
+    padding: 1.2rem 1.5rem;
+  }
+
+  .bet-type-name {
+    font-size: 1.3rem;
+  }
+} 
