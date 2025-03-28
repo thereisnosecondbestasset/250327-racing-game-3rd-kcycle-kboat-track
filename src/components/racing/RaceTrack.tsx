@@ -28,7 +28,7 @@ const smoothstep = (min: number, max: number, value: number) => {
 export const RaceTrack = ({ type }: RaceTrackProps) => {
   const isBoatRace = type === 'boat'
   const waterRef = useRef()
-  const { scene } = useThree()
+  const { scene, camera } = useThree()
   const [trackModel, setTrackModel] = useState<THREE.Group | null>(null)
   const [scaleFactor, setScaleFactor] = useState(1)
   
@@ -49,6 +49,8 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
   const evacuationLineRef = useRef<THREE.Mesh | null>(null);
   const innerLineRef = useRef<THREE.Mesh | null>(null);
   const outerLineRef = useRef<THREE.Mesh | null>(null);
+  const starsRef = useRef<THREE.Points | null>(null);
+  const glowingLightsRef = useRef<(THREE.PointLight | THREE.Mesh)[]>([]);
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime()
@@ -167,13 +169,39 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
         material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
       }
     }
+
+    // 별 반짝임 효과
+    if (starsRef.current) {
+      const opacities = starsRef.current.geometry.attributes.opacity.array as Float32Array;
+      for (let i = 0; i < opacities.length; i++) {
+        opacities[i] = 0.5 + Math.sin(time * 2 + i) * 0.5;
+      }
+      starsRef.current.geometry.attributes.opacity.needsUpdate = true;
+    }
+
+    // 빛나는 광원 반짝임 효과
+    glowingLightsRef.current.forEach((light, index) => {
+      if (light instanceof THREE.PointLight) {
+        light.intensity = 1 + Math.sin(time * 2 + index) * 0.5;
+      } else {
+        const material = light.material as THREE.MeshBasicMaterial;
+        material.opacity = 0.3 + Math.sin(time * 2 + index) * 0.2;
+      }
+    });
   })
 
   // 배경 색상 설정 (Vaporwave 스타일의 어두운 보라색)
   useEffect(() => {
-    scene.background = new THREE.Color('#1a0d2b')
-    scene.fog = new THREE.Fog('#1a0d2b', 100, 1000)
+    scene.background = new THREE.Color('#0a0518')
   }, [scene])
+
+  // 카메라 far 값 조정
+  useEffect(() => {
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.far = 2000;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera]);
 
   // 공통 지오메트리 생성 (재사용)
   const geometries = useMemo(() => ({
@@ -1232,6 +1260,106 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
     };
   }, [isBoatRace, scene, trackLines]);
 
+  // 별과 광원 생성
+  useEffect(() => {
+    // 별 생성
+    const starCount = 200;
+    const starGeometry = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    const starOpacities = new Float32Array(starCount);
+
+    for (let i = 0; i < starCount; i++) {
+      starPositions[i * 3] = (Math.random() - 0.5) * 500; // x: -250 ~ 250
+      starPositions[i * 3 + 1] = Math.random() * 80 + 20; // y: 20 ~ 100
+      starPositions[i * 3 + 2] = (Math.random() - 0.5) * 500; // z: -250 ~ 250
+      starOpacities[i] = Math.random();
+    }
+
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeometry.setAttribute('opacity', new THREE.BufferAttribute(starOpacities, 1));
+
+    const colors = [
+      new THREE.Color('#ff00ff'),
+      new THREE.Color('#00ffff'),
+      new THREE.Color('#8000ff'),
+    ];
+
+    const starMaterial = new THREE.PointsMaterial({
+      size: 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      transparent: true,
+      opacity: 0.8,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      vertexColors: false,
+      fog: false, // 안개 영향 비활성화
+    });
+
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    stars.renderOrder = 4;
+    scene.add(stars);
+    starsRef.current = stars;
+
+    // 빛나는 광원 생성
+    const lightCount = 5;
+    const lightColors = ['#ff00ff', '#00ffff', '#8000ff'];
+
+    for (let i = 0; i < lightCount; i++) {
+      const light = new THREE.PointLight(
+        lightColors[i % lightColors.length],
+        1,
+        200,
+        2
+      );
+      light.position.set(
+        (Math.random() - 0.5) * 400, // x: -200 ~ 200
+        Math.random() * 100 + 50, // y: 50 ~ 150
+        (Math.random() - 0.5) * 400 // z: -200 ~ 200
+      );
+      light.renderOrder = 4;
+      scene.add(light);
+      glowingLightsRef.current.push(light);
+
+      const glowGeometry = new THREE.SphereGeometry(3, 16, 16);
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: lightColors[i % lightColors.length],
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending,
+        fog: false, // 안개 영향 비활성화
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      glow.position.copy(light.position);
+      glow.renderOrder = 4;
+      scene.add(glow);
+      glowingLightsRef.current.push(glow);
+    }
+
+    return () => {
+      if (starsRef.current) {
+        scene.remove(starsRef.current);
+        starsRef.current.geometry.dispose();
+        if (starsRef.current.material instanceof THREE.Material) {
+          starsRef.current.material.dispose();
+        }
+        starsRef.current = null;
+      }
+
+      glowingLightsRef.current.forEach(light => {
+        scene.remove(light);
+        if (light instanceof THREE.PointLight) {
+          light.dispose();
+        } else {
+          light.geometry.dispose();
+          if (light.material instanceof THREE.Material) {
+            light.material.dispose();
+          }
+        }
+      });
+      glowingLightsRef.current = [];
+    };
+  }, [scene]);
+
   // 공통 조명 컴포넌트
   const Lighting = () => (
     <>
@@ -1276,7 +1404,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
           <OrbitControls 
             enablePan={false}
             minDistance={50}
-            maxDistance={200}
+            maxDistance={300}
             minPolarAngle={0}
             maxPolarAngle={Math.PI / 2.5}
             target={[0, -0.2, 0]}
@@ -1331,7 +1459,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
         <OrbitControls 
           enablePan={false}
           minDistance={30}
-          maxDistance={150}
+          maxDistance={250}
           minPolarAngle={0}
           maxPolarAngle={Math.PI / 2.5}
           target={[0, 0, 0]}
