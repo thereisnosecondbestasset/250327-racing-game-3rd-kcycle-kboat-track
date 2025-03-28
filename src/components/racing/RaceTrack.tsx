@@ -30,6 +30,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
   const waterRef = useRef()
   const { scene } = useThree()
   const [trackModel, setTrackModel] = useState<THREE.Group | null>(null)
+  const [scaleFactor, setScaleFactor] = useState(1)
   
   const cubesRef = useRef<THREE.Mesh[]>([])
   const particlesRef = useRef<THREE.Mesh[]>([])
@@ -37,12 +38,17 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
   const textMeshRef = useRef<THREE.Mesh | null>(null)
   const marker1Ref = useRef<THREE.Mesh | null>(null);
   const marker2Ref = useRef<THREE.Mesh | null>(null);
-  const startFinishLineRef = useRef<THREE.Line | null>(null);
+  const startFinishLineRef = useRef<THREE.Mesh | null>(null);
   const newStartFinishLineRef = useRef<THREE.Mesh | null>(null);
   const marker1LabelRef = useRef<THREE.Mesh | null>(null);
   const marker2LabelRef = useRef<THREE.Mesh | null>(null);
   const startFinishParticlesRef = useRef<THREE.Mesh[]>([]);
   const newStartFinishParticlesRef = useRef<THREE.Mesh[]>([]);
+  const startLineRef = useRef<THREE.Mesh | null>(null);
+  const finishLineRef = useRef<THREE.Mesh | null>(null);
+  const evacuationLineRef = useRef<THREE.Mesh | null>(null);
+  const innerLineRef = useRef<THREE.Mesh | null>(null);
+  const outerLineRef = useRef<THREE.Mesh | null>(null);
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime()
@@ -107,9 +113,9 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
         marker2LabelRef.current.position.y = 18 + Math.sin(time + Math.PI) * 1; // 기준 높이를 10에서 18로 변경
       }
 
-      // 기존 스타팅/피니쉬 라인 점멸 효과
-      if (startFinishLineRef.current) {
-        const material = startFinishLineRef.current.material as THREE.LineBasicMaterial;
+      // 외곽선 점멸 효과
+      if (boatTrackBoundary) {
+        const material = boatTrackBoundary.material as THREE.MeshBasicMaterial;
         material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
       }
 
@@ -138,6 +144,28 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
           particle.userData.forward = false;
         }
       });
+    } else {
+      // 경륜 트랙 점멸 효과
+      if (startLineRef.current) {
+        const material = startLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+      if (finishLineRef.current) {
+        const material = finishLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+      if (evacuationLineRef.current) {
+        const material = evacuationLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+      if (innerLineRef.current) {
+        const material = innerLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+      if (outerLineRef.current) {
+        const material = outerLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
     }
   })
 
@@ -161,10 +189,10 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
       roughness: 0.3,
       metalness: 0.8,
       emissive: "#8000ff",
-      emissiveIntensity: 1.0,
+      emissiveIntensity: 1.5,
       envMapIntensity: 2.0,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.5,
       side: THREE.DoubleSide,
       wireframe: false,
     }),
@@ -364,19 +392,23 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
     );
     points.push(...curve2.getPoints(curveSegments).map(p => new THREE.Vector3(p.x, p.y, 0)));
 
-    // BufferGeometry로 변환
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
+    // CatmullRomCurve3로 부드러운 곡선 생성
+    const curve = new THREE.CatmullRomCurve3(points, true);
+    const tubeGeometry = new THREE.TubeGeometry(curve, 64, 0.5, 8, true);
+
+    const material = new THREE.MeshBasicMaterial({
       color: '#00ffff',
-      linewidth: 3,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
     });
 
-    const boundary = new THREE.LineLoop(geometry, material);
+    const boundary = new THREE.Mesh(tubeGeometry, material);
     boundary.rotation.x = -Math.PI / 2;
     boundary.position.y = -0.1;
+    boundary.renderOrder = 3;
 
     return boundary;
   }, [isBoatRace]);
@@ -432,6 +464,80 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
 
     return new THREE.BufferGeometry().setFromPoints(points)
   }, [keirinTrack])
+
+  // 퇴피선, 내선, 외선 생성
+  const trackLines = useMemo(() => {
+    const trackWidth = 10;
+    const straightLength = 50 * scaleFactor;
+    const curveRadius = 25 * scaleFactor;
+    const innerRadius = 5 * scaleFactor;
+
+    const lines = {
+      evacuation: { radius: innerRadius, color: '#ff00ff' },
+      inner: { radius: innerRadius + 2 * scaleFactor, color: '#00ffff' },
+      outer: { radius: innerRadius + 4 * scaleFactor, color: '#ffff00' },
+    };
+
+    const geometries: { [key: string]: THREE.TubeGeometry } = {};
+
+    const positions = keirinTrack.attributes.position.array as Float32Array;
+    let maxHeight = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      const height = positions[i + 2];
+      if (height > maxHeight) maxHeight = height;
+    }
+
+    Object.entries(lines).forEach(([key, { radius, color }]) => {
+      const points: THREE.Vector3[] = [];
+
+      points.push(new THREE.Vector3(-straightLength / 2, -radius, 0));
+      points.push(new THREE.Vector3(straightLength / 2, -radius, 0));
+
+      const curve1 = new THREE.EllipseCurve(
+        straightLength / 2, 0,
+        radius, radius,
+        -Math.PI / 2, Math.PI / 2,
+        false
+      );
+      points.push(...curve1.getPoints(32).map(p => new THREE.Vector3(p.x, p.y, 0)));
+
+      points.push(new THREE.Vector3(straightLength / 2, radius, 0));
+      points.push(new THREE.Vector3(-straightLength / 2, radius, 0));
+
+      const curve2 = new THREE.EllipseCurve(
+        -straightLength / 2, 0,
+        radius, radius,
+        Math.PI / 2, -Math.PI / 2,
+        false
+      );
+      points.push(...curve2.getPoints(32).map(p => new THREE.Vector3(p.x, p.y, 0)));
+
+      points.forEach(point => {
+        const x = point.x;
+        const y = point.y;
+        let height = 0;
+        let minDist = Infinity;
+        for (let i = 0; i < positions.length; i += 3) {
+          const px = positions[i];
+          const py = positions[i + 1];
+          const pz = positions[i + 2];
+          const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+          if (dist < minDist) {
+            minDist = dist;
+            height = pz;
+          }
+        }
+        point.x = x;
+        point.y = height + 3;
+        point.z = y;
+      });
+
+      const curve = new THREE.CatmullRomCurve3(points, true);
+      geometries[key] = new THREE.TubeGeometry(curve, 64, 0.3, 8, true);
+    });
+
+    return geometries;
+  }, [keirinTrack, scaleFactor]);
 
   // 3D 모델 로드
   useEffect(() => {
@@ -491,7 +597,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
           centerX /= (racingLinePoints.length / 3);
           centerZ /= (racingLinePoints.length / 3);
 
-          object.position.set(centerX, maxHeight + 0.1, centerZ);
+          object.position.set(centerX, maxHeight, centerZ);
           object.rotation.set(-Math.PI / 2, 0, 0);
 
           object.traverse((child: THREE.Object3D) => {
@@ -499,10 +605,11 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
               const material = materials.track.clone();
               material.wireframe = false;
               material.transparent = true;
-              material.opacity = 0.8;
+              material.opacity = 0.1;
               material.side = THREE.DoubleSide;
               material.emissive = new THREE.Color('#8000ff');
               material.emissiveIntensity = 1.0;
+              material.depthWrite = false;
               child.material = material;
               child.receiveShadow = true;
               child.castShadow = true;
@@ -608,7 +715,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
     const trackSize = isBoatRace ? { width: 160, height: 80 } : { width: 50, height: 50 }
     const cubeGeometry = new THREE.BoxGeometry(1, 1, 1)
     const cubeMaterial = new THREE.MeshBasicMaterial({
-      color: isBoatRace ? '#00ffff' : '#8000ff',
+      color: '#00ffff',
       transparent: true,
       opacity: 0.7,
       blending: THREE.AdditiveBlending,
@@ -767,18 +874,21 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
     marker2Ref.current = marker2;
 
     // 기존 스타팅/피니쉬 라인 생성 (마커1과 마커2를 연결)
-    const startFinishGeometry = new THREE.BufferGeometry().setFromPoints([
+    const startFinishPoints = [
       new THREE.Vector3(-80, -0.1, 0),
       new THREE.Vector3(80, -0.1, 0),
-    ]);
-    const startFinishMaterial = new THREE.LineBasicMaterial({
+    ];
+    const startFinishCurve = new THREE.CatmullRomCurve3(startFinishPoints);
+    const startFinishGeometry = new THREE.TubeGeometry(startFinishCurve, 20, 0.5, 8, false);
+    const startFinishMaterial = new THREE.MeshBasicMaterial({
       color: '#ff00ff',
-      linewidth: 5,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
     });
-    const startFinishLine = new THREE.Line(startFinishGeometry, startFinishMaterial);
+    const startFinishLine = new THREE.Mesh(startFinishGeometry, startFinishMaterial);
     startFinishLine.renderOrder = 3;
     scene.add(startFinishLine);
     startFinishLineRef.current = startFinishLine;
@@ -793,6 +903,7 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
+      depthTest: false,
     });
     const newStartFinishLine = new THREE.Mesh(newStartFinishGeometry, newStartFinishMaterial);
     newStartFinishLine.position.set(0, -0.1, 20); // 중앙 위치: z = (40 + 0) / 2 = 20
@@ -812,9 +923,9 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
 
     for (let i = 0; i < 5; i++) {
       const t = i / 4;
-      const z = 40 - t * (40 - 0); // z = 40에서 z = 0까지 선형 보간
+      const z = 40 - t * 40; // z = 40에서 z = 0까지 선형 보간
       const particle = new THREE.Mesh(newParticleGeometry, newParticleMaterial);
-      particle.position.set(0, -0.1, z); // x = 0으로 고정, z는 40에서 0까지
+      particle.position.set(0, -0.1, z);
       particle.userData = {
         speed: 0.5 + Math.random() * 0.5,
         forward: Math.random() > 0.5,
@@ -981,6 +1092,146 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
     };
   }, [isBoatRace, scene]);
 
+  // 경륜 트랙에 출발선과 결승선 추가
+  useEffect(() => {
+    if (isBoatRace) return;
+
+    const positions = keirinTrack.attributes.position.array as Float32Array;
+    let maxHeight = 0;
+    for (let i = 0; i < positions.length; i += 3) {
+      const height = positions[i + 2];
+      if (height > maxHeight) maxHeight = height;
+    }
+
+    // 스타트 라인 (PlaneGeometry 사용)
+    const startLineWidth = 5; // 선의 굵기
+    const startLineLength = 15 * scaleFactor; // 선의 길이
+    const startLineGeometry = new THREE.PlaneGeometry(startLineWidth, startLineLength);
+    const startLineMaterial = new THREE.MeshBasicMaterial({
+      color: '#ff00ff',
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const startLine = new THREE.Mesh(startLineGeometry, startLineMaterial);
+    startLine.position.set(0 * scaleFactor, maxHeight + 5, 12.5 * scaleFactor);
+    startLine.rotation.x = Math.PI / 2;
+    startLine.renderOrder = 4;
+    scene.add(startLine);
+    startLineRef.current = startLine;
+
+    // 피니쉬 라인 (PlaneGeometry 사용)
+    const finishLineWidth = 5;
+    const finishLineLength = 15 * scaleFactor;
+    const finishLineGeometry = new THREE.PlaneGeometry(finishLineWidth, finishLineLength);
+    const finishLineMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffff00',
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const finishLine = new THREE.Mesh(finishLineGeometry, finishLineMaterial);
+    finishLine.position.set(20 * scaleFactor, maxHeight + 5, 12.5 * scaleFactor);
+    finishLine.rotation.x = Math.PI / 2;
+    finishLine.renderOrder = 4;
+    scene.add(finishLine);
+    finishLineRef.current = finishLine;
+
+    return () => {
+      if (startLineRef.current) {
+        scene.remove(startLineRef.current);
+        startLineRef.current.geometry.dispose();
+        if (startLineRef.current.material instanceof THREE.Material) {
+          startLineRef.current.material.dispose();
+        }
+        startLineRef.current = null;
+      }
+      if (finishLineRef.current) {
+        scene.remove(finishLineRef.current);
+        finishLineRef.current.geometry.dispose();
+        if (finishLineRef.current.material instanceof THREE.Material) {
+          finishLineRef.current.material.dispose();
+        }
+        finishLineRef.current = null;
+      }
+    };
+  }, [isBoatRace, scene, scaleFactor, keirinTrack]);
+
+  // 경륜 트랙에 퇴피선, 내선, 외선 추가
+  useEffect(() => {
+    if (isBoatRace) return;
+
+    const evacuationLineMaterial = new THREE.MeshBasicMaterial({
+      color: '#ff00ff',
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const evacuationLine = new THREE.Mesh(trackLines.evacuation, evacuationLineMaterial);
+    evacuationLine.renderOrder = 3;
+    scene.add(evacuationLine);
+    evacuationLineRef.current = evacuationLine;
+
+    const innerLineMaterial = new THREE.MeshBasicMaterial({
+      color: '#00ffff',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const innerLine = new THREE.Mesh(trackLines.inner, innerLineMaterial);
+    innerLine.renderOrder = 3;
+    scene.add(innerLine);
+    innerLineRef.current = innerLine;
+
+    const outerLineMaterial = new THREE.MeshBasicMaterial({
+      color: '#ffff00',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false,
+    });
+    const outerLine = new THREE.Mesh(trackLines.outer, outerLineMaterial);
+    outerLine.renderOrder = 3;
+    scene.add(outerLine);
+    outerLineRef.current = outerLine;
+
+    return () => {
+      if (evacuationLineRef.current) {
+        scene.remove(evacuationLineRef.current);
+        evacuationLineRef.current.geometry.dispose();
+        if (evacuationLineRef.current.material instanceof THREE.Material) {
+          evacuationLineRef.current.material.dispose();
+        }
+        evacuationLineRef.current = null;
+      }
+      if (innerLineRef.current) {
+        scene.remove(innerLineRef.current);
+        innerLineRef.current.geometry.dispose();
+        if (innerLineRef.current.material instanceof THREE.Material) {
+          innerLineRef.current.material.dispose();
+        }
+        innerLineRef.current = null;
+      }
+      if (outerLineRef.current) {
+        scene.remove(outerLineRef.current);
+        outerLineRef.current.geometry.dispose();
+        if (outerLineRef.current.material instanceof THREE.Material) {
+          outerLineRef.current.material.dispose();
+        }
+        outerLineRef.current = null;
+      }
+    };
+  }, [isBoatRace, scene, trackLines]);
+
   // 공통 조명 컴포넌트
   const Lighting = () => (
     <>
@@ -1037,12 +1288,12 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
             divisions={50}
             fadeDistance={200}
             fadeStrength={1}
-            opacity={0.3}
+            opacity={0}
             position={[0, -0.15, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
-            renderOrder={1}
+            renderOrder={0}
             depthWrite={false}
-            depthTest={true}
+            depthTest={false}
             color="#00ffff"
           />
 
@@ -1113,10 +1364,10 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
           divisions={50}
           fadeDistance={200}
           fadeStrength={1}
-          opacity={0.5}
+          opacity={1}
           position={[0, -0.15, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
-          renderOrder={2}
+          renderOrder={0}
           depthWrite={false}
           depthTest={false}
         />
