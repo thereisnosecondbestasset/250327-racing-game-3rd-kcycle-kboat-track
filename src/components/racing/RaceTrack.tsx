@@ -35,6 +35,14 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
   const particlesRef = useRef<THREE.Mesh[]>([])
   const waterParticlesRef = useRef<THREE.Mesh[]>([])
   const textMeshRef = useRef<THREE.Mesh | null>(null)
+  const marker1Ref = useRef<THREE.Mesh | null>(null);
+  const marker2Ref = useRef<THREE.Mesh | null>(null);
+  const startFinishLineRef = useRef<THREE.Line | null>(null);
+  const newStartFinishLineRef = useRef<THREE.Mesh | null>(null);
+  const marker1LabelRef = useRef<THREE.Mesh | null>(null);
+  const marker2LabelRef = useRef<THREE.Mesh | null>(null);
+  const startFinishParticlesRef = useRef<THREE.Mesh[]>([]);
+  const newStartFinishParticlesRef = useRef<THREE.Mesh[]>([]);
 
   useFrame(({ clock }) => {
     const time = clock.getElapsedTime()
@@ -82,6 +90,54 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
 
     if (waterEffect && isBoatRace) {
       waterEffect.material.uniforms.time.value = time
+    }
+
+    if (isBoatRace) {
+      // 마커 떠다니는 애니메이션
+      if (marker1Ref.current) {
+        marker1Ref.current.position.y = Math.sin(time) * 1;
+      }
+      if (marker2Ref.current) {
+        marker2Ref.current.position.y = Math.sin(time + Math.PI) * 1;
+      }
+      if (marker1LabelRef.current) {
+        marker1LabelRef.current.position.y = 18 + Math.sin(time) * 1; // 기준 높이를 10에서 18로 변경
+      }
+      if (marker2LabelRef.current) {
+        marker2LabelRef.current.position.y = 18 + Math.sin(time + Math.PI) * 1; // 기준 높이를 10에서 18로 변경
+      }
+
+      // 기존 스타팅/피니쉬 라인 점멸 효과
+      if (startFinishLineRef.current) {
+        const material = startFinishLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+
+      // 새로운 스타팅/피니쉬 라인 점멸 효과
+      if (newStartFinishLineRef.current) {
+        const material = newStartFinishLineRef.current.material as THREE.LineBasicMaterial;
+        material.opacity = 0.6 + Math.sin(time * 2) * 0.3;
+      }
+
+      // 스타팅/피니쉬 라인 파티클 이동
+      startFinishParticlesRef.current.forEach(particle => {
+        particle.position.x += particle.userData.speed * (particle.userData.forward ? 1 : -1);
+        if (particle.position.x >= 80) {
+          particle.userData.forward = false;
+        } else if (particle.position.x <= -80) {
+          particle.userData.forward = true;
+        }
+      });
+
+      // 새로운 스타팅/피니쉬 라인 파티클 이동
+      newStartFinishParticlesRef.current.forEach(particle => {
+        particle.position.z += particle.userData.speed * (particle.userData.forward ? -1 : 1);
+        if (particle.position.z >= 40) { // z = 40까지
+          particle.userData.forward = true;
+        } else if (particle.position.z <= 0) { // z = 0까지
+          particle.userData.forward = false;
+        }
+      });
     }
   })
 
@@ -680,6 +736,250 @@ export const RaceTrack = ({ type }: RaceTrackProps) => {
       waterParticlesRef.current = []
     }
   }, [isBoatRace, scene])
+
+  // 마커와 스타팅/피니쉬 라인 추가
+  useEffect(() => {
+    if (!isBoatRace) return;
+
+    // 마커1, 마커2 생성 (원뿔 형태)
+    const markerGeometry = new THREE.ConeGeometry(6, 15, 32);
+    const markerMaterial = new THREE.MeshBasicMaterial({
+      color: '#00ffff',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+
+    // 마커1 (x = 80, z = 0)
+    const marker1 = new THREE.Mesh(markerGeometry, markerMaterial);
+    marker1.position.set(80, 0, 0);
+    marker1.rotation.set(0, 0, 0);
+    marker1.renderOrder = 3;
+    scene.add(marker1);
+    marker1Ref.current = marker1;
+
+    // 마커2 (x = -80, z = 0)
+    const marker2 = new THREE.Mesh(markerGeometry, markerMaterial);
+    marker2.position.set(-80, 0, 0);
+    marker2.rotation.set(0, 0, 0);
+    marker2.renderOrder = 3;
+    scene.add(marker2);
+    marker2Ref.current = marker2;
+
+    // 기존 스타팅/피니쉬 라인 생성 (마커1과 마커2를 연결)
+    const startFinishGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-80, -0.1, 0),
+      new THREE.Vector3(80, -0.1, 0),
+    ]);
+    const startFinishMaterial = new THREE.LineBasicMaterial({
+      color: '#ff00ff',
+      linewidth: 5,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+    const startFinishLine = new THREE.Line(startFinishGeometry, startFinishMaterial);
+    startFinishLine.renderOrder = 3;
+    scene.add(startFinishLine);
+    startFinishLineRef.current = startFinishLine;
+
+    // 새로운 스타팅/피니쉬 라인 생성 (z = 40에서 z = 0까지, PlaneGeometry 사용)
+    const width = 5; // 라인 두께 (5m로 설정)
+    const length = 40; // 라인 길이 (z = 40에서 z = 0까지)
+    const newStartFinishGeometry = new THREE.PlaneGeometry(width, length);
+    const newStartFinishMaterial = new THREE.MeshBasicMaterial({
+      color: '#ff00ff',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const newStartFinishLine = new THREE.Mesh(newStartFinishGeometry, newStartFinishMaterial);
+    newStartFinishLine.position.set(0, -0.1, 20); // 중앙 위치: z = (40 + 0) / 2 = 20
+    newStartFinishLine.rotation.x = Math.PI / 2; // 수직으로 세우기
+    newStartFinishLine.renderOrder = 3;
+    scene.add(newStartFinishLine);
+    newStartFinishLineRef.current = newStartFinishLine;
+
+    // 새로운 스타팅/피니쉬 라인 파티클 추가
+    const newParticleGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+    const newParticleMaterial = new THREE.MeshBasicMaterial({
+      color: '#ff00ff',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      const z = 40 - t * (40 - 0); // z = 40에서 z = 0까지 선형 보간
+      const particle = new THREE.Mesh(newParticleGeometry, newParticleMaterial);
+      particle.position.set(0, -0.1, z); // x = 0으로 고정, z는 40에서 0까지
+      particle.userData = {
+        speed: 0.5 + Math.random() * 0.5,
+        forward: Math.random() > 0.5,
+      };
+      particle.renderOrder = 3;
+      scene.add(particle);
+      newStartFinishParticlesRef.current.push(particle);
+    }
+
+    // 마커 라벨 추가
+    const fontLoader = new FontLoader();
+    fontLoader.load(
+      '/fonts/Orbitron_Regular.json',
+      (font) => {
+        // 마커1 라벨
+        const marker1LabelGeometry = new TextGeometry('TURNMARK 1', {
+          font: font,
+          size: 3,
+          height: 0.5,
+          curveSegments: 12,
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.02,
+          bevelSegments: 5,
+        });
+        const labelMaterial = new THREE.MeshBasicMaterial({
+          color: '#ff00ff',
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+        });
+        const marker1Label = new THREE.Mesh(marker1LabelGeometry, labelMaterial);
+        marker1LabelGeometry.computeBoundingBox();
+        const label1Width = marker1LabelGeometry.boundingBox!.max.x - marker1LabelGeometry.boundingBox!.min.x;
+        marker1Label.position.set(80 - label1Width / 2, 18, 0);
+        marker1Label.renderOrder = 3;
+        scene.add(marker1Label);
+        marker1LabelRef.current = marker1Label;
+
+        // 마커2 라벨
+        const marker2LabelGeometry = new TextGeometry('TURNMARK 2', {
+          font: font,
+          size: 3,
+          height: 0.5,
+          curveSegments: 12,
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.02,
+          bevelSegments: 5,
+        });
+        const marker2Label = new THREE.Mesh(marker2LabelGeometry, labelMaterial);
+        marker2LabelGeometry.computeBoundingBox();
+        const label2Width = marker2LabelGeometry.boundingBox!.max.x - marker2LabelGeometry.boundingBox!.min.x;
+        marker2Label.position.set(-80 - label2Width / 2, 18, 0);
+        marker2Label.renderOrder = 3;
+        scene.add(marker2Label);
+        marker2LabelRef.current = marker2Label;
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading font for marker labels:', error);
+      }
+    );
+
+    // 스타팅/피니쉬 라인 파티클 추가
+    const particleGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+    const particleMaterial = new THREE.MeshBasicMaterial({
+      color: '#ff00ff',
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+      particle.position.set(
+        -80 + (i * 160) / 4,
+        -0.1,
+        0
+      );
+      particle.userData = {
+        speed: 0.5 + Math.random() * 0.5,
+        forward: Math.random() > 0.5,
+      };
+      particle.renderOrder = 3;
+      scene.add(particle);
+      startFinishParticlesRef.current.push(particle);
+    }
+
+    return () => {
+      // 정리
+      if (marker1Ref.current) {
+        scene.remove(marker1Ref.current);
+        marker1Ref.current.geometry.dispose();
+        if (marker1Ref.current.material instanceof THREE.Material) {
+          marker1Ref.current.material.dispose();
+        }
+        marker1Ref.current = null;
+      }
+      if (marker2Ref.current) {
+        scene.remove(marker2Ref.current);
+        marker2Ref.current.geometry.dispose();
+        if (marker2Ref.current.material instanceof THREE.Material) {
+          marker2Ref.current.material.dispose();
+        }
+        marker2Ref.current = null;
+      }
+      if (startFinishLineRef.current) {
+        scene.remove(startFinishLineRef.current);
+        startFinishLineRef.current.geometry.dispose();
+        if (startFinishLineRef.current.material instanceof THREE.Material) {
+          startFinishLineRef.current.material.dispose();
+        }
+        startFinishLineRef.current = null;
+      }
+
+      // 마커 라벨 정리
+      if (marker1LabelRef.current) {
+        scene.remove(marker1LabelRef.current);
+        marker1LabelRef.current.geometry.dispose();
+        if (marker1LabelRef.current.material instanceof THREE.Material) {
+          marker1LabelRef.current.material.dispose();
+        }
+        marker1LabelRef.current = null;
+      }
+      if (marker2LabelRef.current) {
+        scene.remove(marker2LabelRef.current);
+        marker2LabelRef.current.geometry.dispose();
+        if (marker2LabelRef.current.material instanceof THREE.Material) {
+          marker2LabelRef.current.material.dispose();
+        }
+        marker2LabelRef.current = null;
+      }
+
+      // 스타팅/피니쉬 라인 파티클 정리
+      startFinishParticlesRef.current.forEach(particle => {
+        scene.remove(particle);
+        particle.geometry.dispose();
+        if (particle.material instanceof THREE.Material) {
+          particle.material.dispose();
+        }
+      });
+      startFinishParticlesRef.current = [];
+
+      // 새로운 스타팅/피니쉬 라인 정리 (Mesh 타입)
+      if (newStartFinishLineRef.current) {
+        scene.remove(newStartFinishLineRef.current);
+        newStartFinishLineRef.current.geometry.dispose();
+        if (newStartFinishLineRef.current.material instanceof THREE.Material) {
+          newStartFinishLineRef.current.material.dispose();
+        }
+        newStartFinishLineRef.current = null;
+      }
+
+      // 새로운 스타팅/피니쉬 라인 파티클 정리
+      newStartFinishParticlesRef.current.forEach(particle => {
+        scene.remove(particle);
+        particle.geometry.dispose();
+        if (particle.material instanceof THREE.Material) {
+          particle.material.dispose();
+        }
+      });
+      newStartFinishParticlesRef.current = [];
+    };
+  }, [isBoatRace, scene]);
 
   // 공통 조명 컴포넌트
   const Lighting = () => (
